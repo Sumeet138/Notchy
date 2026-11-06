@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds Notchy.app next to this script. Run: ./build.sh && open Notchy.app
+# Builds Notchy.app, installs it to /Applications and starts it at login. Run: ./build.sh
 set -e
 cd "$(dirname "$0")"
 mkdir -p Notchy.app/Contents/MacOS
@@ -38,6 +38,10 @@ security unlock-keychain -p $KCPW "$KC"
 codesign --force --keychain "$KC" -s "$ID" -i com.ayux.notchy Notchy.app
 echo "Built $(pwd)/Notchy.app"
 
+# Install to /Applications so launchd never depends on where this repo lives.
+pkill -x Notchy || true
+rm -rf /Applications/Notchy.app && ditto Notchy.app /Applications/Notchy.app
+
 # Always running: start at login, restart if it crashes (Quit from the menu still quits — clean exit).
 AGENT="$HOME/Library/LaunchAgents/com.ayux.notchy.plist"
 cat > "$AGENT" <<PLIST
@@ -45,13 +49,12 @@ cat > "$AGENT" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>com.ayux.notchy</string>
-  <key>Program</key><string>$(pwd)/Notchy.app/Contents/MacOS/Notchy</string>
+  <key>Program</key><string>/Applications/Notchy.app/Contents/MacOS/Notchy</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>ProcessType</key><string>Interactive</string>
 </dict></plist>
 PLIST
-pkill -x Notchy || true
 launchctl bootout gui/$(id -u)/com.ayux.notchy 2>/dev/null || true
 launchctl bootstrap gui/$(id -u) "$AGENT"
 echo "Notchy (re)started via launchd"
